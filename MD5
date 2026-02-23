@@ -1,0 +1,17 @@
+a08e81890d746d9a59305c32fa64fba7 *DESCRIPTION
+313eb3e21ddc406f27b335d38eb6af48 *LICENSE
+fc15e7b252015d3534fc8a6cadb8559e *NAMESPACE
+41b5425e3c0b254cb5af4a5b03c19627 *R/MVNGmod.R
+ed19ca99581136d44b35bbb2240a6bf6 *R/mod_aic.R
+d41d8cd98f00b204e9800998ecf8427e *README
+d2bbc58d3725f28aed5bdd8cc9a6de21 *data/gaad_pac.RData
+fc0edb8135d5ff214db3adbe80b5633c *man/MVNIGmod.Rd
+0f5a8427c279199271c683700d239cbd *man/MVVGmod.Rd
+93cff95b90579bcaf7a3939bb4971570 *man/X.Rd
+0704df749f3ac57831c6c40cc6162371 *man/Y.Rd
+e4ff7e9d4f0fb72f8f79c1ae587a79ae *man/gaad_cov.Rd
+a67a7698a44148a5a3ddc27f67ecf078 *man/gaad_res.Rd
+71fc75a36088ea8bed6c4ca76e19a761 *man/gaad_theta_mvvg.Rd
+7936c491fc9da477c623000ca3625afb *man/predict.Rd
+3e07cf959c3a4fd7b20b3fd8821cb7b0 *man/theta_mvnig.Rd
+b73e2258de1e36a7bb245e95b4cd9d69 *man/theta_mvvg.Rd
