@@ -5,7 +5,7 @@
 \alias{theta_mvvg}
 \title{Toy Response Initial Parameter (MVVG)}
 \format{
-List of parameters for input to MVVGmod function
+List of parameters for input to \code{MVVGmod} function
 }
 \usage{
 theta_mvvg

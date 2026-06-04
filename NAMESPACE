@@ -2,4 +2,5 @@
 
 export(MVNIGmod)
 export(MVVGmod)
+export(case_del)
 export(predict)

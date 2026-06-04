@@ -18,6 +18,12 @@ library(maxLik                )
 library(truncnorm             )
 # library(mvtnorm               )
 library(parallel              )
+library(matrixcalc)
+
+rbind0 <- function(x,y){
+  diff <- ncol(x)-ncol(y)
+  rbind(x,cbind(matrix(0,nrow(y), diff),y))
+}
 
 # turns unlisted vector into formatted list according to how i do distributions
 reconstitute <- function(unlisted, nparams, nresp, extra_names = NULL) {
@@ -174,7 +180,7 @@ rhofun <- function(A, Sigma_inv, Psi_inv) {
 deltafun <- function(Y, X, Theta, Sigma_inv, Psi_inv) {
   loc <- (Y - X %*% Theta)
   matlib::tr(Sigma_inv %*% loc %*% Psi_inv %*% t(loc))
-  #t(vec(loc)) %*% (Psi_inv %x% Sigma_inv)  %*% vec(loc)
+  #t(matrixcalc::vec(loc)) %*% (Psi_inv %x% Sigma_inv)  %*% matrixcalc::vec(loc)
 }
 
 # That other quadratic form thing Gallaugher had in his paper
@@ -183,7 +189,7 @@ deltafun <- function(Y, X, Theta, Sigma_inv, Psi_inv) {
 bilinform <- function(Y, X, A, Theta, Sigma_inv, Psi_inv) {
   loc <- (Y - X %*% Theta)
   matlib::tr(Sigma_inv %*% loc %*% Psi_inv %*% t(A))
-  #t(vec(A)) %*% (Psi_inv %x% Sigma_inv) %*% vec(loc)
+  #t(matrixcalc::vec(A)) %*% (Psi_inv %x% Sigma_inv) %*% matrixcalc::vec(loc)
 }
 
 
@@ -425,6 +431,54 @@ q2i.mvgh.update <- function(Yi, Xi, ui, zetai, xii, theta) {
 
 
 
+q2i.mvvg.update <- function(Yi, Xi, ui, zetai, xii, theta) {
+  ni <- nrow(Yi)
+  p <- ncol(Yi)
+  Sigma_inv <- csform(ni, theta$rho, TRUE)
+  Psi_inv <- solve(theta$Psi)
+  amat <- a.mat(ni, theta$A)
+  rho <- rhofun(amat, Sigma_inv, Psi_inv)
+  delta <- deltafun(Yi, Xi, theta$Theta, Sigma_inv, Psi_inv)
+
+  t1 <- theta$gamma * log(theta$gamma)
+  t2 <- ni * p / 2 * log(1 - theta$rho)
+  t3 <- p / 2 * log(1 - ni + ni / (1 - theta$rho))
+  t4 <- ni / 2 * log(det(theta$Psi))
+  t5 <- log(gamma(theta$gamma)) -
+    (theta$gamma - ni*p - 1)*xii
+  t6 <- bilinform(Yi, Xi, amat, theta$Theta, Sigma_inv, Psi_inv)
+  t7a <- zetai * (delta )
+  t7b <- ui * (rho )
+  t7 <- 0.5 * (t7a + t7b) + theta$gamma * ui
+  # if (sum(is.nan(c(t1, t2, t3, t4, t5, t6, t7)))) {
+  #   browser()
+  # }
+  t1 - t2 - t3 - t4 - t5 + t6 - t7
+}
+
+q2i.mvnig.update <- function(Yi, Xi, ui, zetai, xii, theta) {
+  ni <- nrow(Yi)
+  p <- ncol(Yi)
+  Sigma_inv <- csform(ni, theta$rho, TRUE)
+  Psi_inv <- solve(theta$Psi)
+  amat <- a.mat(ni, theta$A)
+  rho <- rhofun(amat, Sigma_inv, Psi_inv)
+  delta <- deltafun(Yi, Xi, theta$Theta, Sigma_inv, Psi_inv)
+
+  t1 <- 0
+  t2 <- ni * p / 2 * log(1 - theta$rho)
+  t3 <- p / 2 * log(1 - ni + ni / (1 - theta$rho))
+  t4 <- ni / 2 * log(det(theta$Psi))
+  t5 <- (3+ni*p)/2 * xii
+  t6 <- bilinform(Yi, Xi, amat, theta$Theta, Sigma_inv, Psi_inv)
+  t7a <-  (delta +1)*zetai
+  t7b <- ui * (rho )
+  t7 <- 0.5 * (t7a + t7b) + theta$tgamma^2 * ui/2 - theta$tgamma
+  # if (sum(is.nan(c(t1, t2, t3, t4, t5, t6, t7)))) {
+  #   browser()
+  # }
+  t1 - t2 - t3 - t4 - t5 + t6 - t7
+}
 
 # update Q2 over all subjects
 q2.mvgh.update <- function(Y, X, latentvars, theta) {
@@ -442,11 +496,621 @@ q2.mvgh.update <- function(Y, X, latentvars, theta) {
   ret
 }
 
+q2.mvvg.update <- function(Y, X, latentvars, theta) {
+  ret <- 0
+  for (i in 1:length(Y)) {
+    ret <-
+      ret + q2i.mvvg.update(Y[[i]],
+                            X[[i]],
+                            latentvars$u[i],
+                            latentvars$zeta[i],
+                            latentvars$xi[i],
+                            theta)
+  }
+
+  ret
+}
+
+q2.mvnig.update <- function(Y, X, latentvars, theta) {
+  ret <- 0
+  for (i in 1:length(Y)) {
+    ret <-
+      ret + q2i.mvnig.update(Y[[i]],
+                             X[[i]],
+                             latentvars$u[i],
+                             latentvars$zeta[i],
+                             latentvars$xi[i],
+                             theta)
+  }
+
+  ret
+}
+
 # proposed stopping condition:
 # Compute L-infinity norm of theta
 linf <- function(theta, prev) {
   #max(abs(unlist(theta)))
   max(abs(unlist(theta) - unlist(prev)))
+}
+
+
+s2i.mvvg.update <- function(Yi, Xi, ui, zetai, xii, theta) {
+  ni <- nrow(Yi)
+  p <- ncol(Yi)
+  Sigma_inv <- csform(ni, theta$rho, TRUE)
+  Psi_inv <- solve(theta$Psi)
+  amat <- a.mat(ni, theta$A)
+  rho <- rhofun(amat, Sigma_inv, Psi_inv)
+  delta <- deltafun(Yi, Xi, theta$Theta, Sigma_inv, Psi_inv)
+  ones <- rep(1,ni)
+  J <- matrix(1, nrow = ni, ncol = ni)
+  loc <- (Yi - Xi %*% theta$Theta)
+
+  score_theta <- -t(Psi_inv %*% t(amat) %*% Sigma_inv %*% Xi) + zetai * (t(Xi) %*% Sigma_inv %*% Yi %*% Psi_inv) -
+    zetai * (t(Xi) %*% Sigma_inv %*% Xi) %*% theta$Theta %*% Psi_inv
+  # vtheta <- matrixcalc::vec(theta$Theta)
+  #
+  # score_theta <- -t(matrixcalc::vec(t(Psi_inv %*% t(amat) %*% Sigma_inv %*% Xi))) - zetai *
+  #   (
+  #     (Psi_inv %x% (t(Xi) %*% Sigma_inv %*% Xi)) %*% vtheta -
+  #       matrixcalc::vec(Psi_inv %*%)
+  #
+
+  score_a <- Psi_inv %*% t(Yi - Xi %*% theta$Theta) %*% Sigma_inv %*% ones -
+    ui*Psi_inv %*% theta$A %*% t(ones) %*% Sigma_inv %*% ones
+
+  score_rho <- ni*p/2/(1-theta$rho) -
+    (p/2) * (ni/((1-ni + ni/(1-theta$rho)) * (1-theta$rho)^2)) - 0.5/(1-theta$rho)^2 *
+    (
+      zetai*matlib::tr(loc %*% Psi_inv %*% t(loc)) -
+        2 * matlib::tr(loc %*% Psi_inv %*% t(amat)) +
+        ui * matlib::tr(amat %*% Psi_inv %*% t(amat))
+    ) +
+    0.5 * (ni*theta$rho^2 - theta$rho^2 + 1)/((1-theta$rho)^2 * (1-theta$rho + ni*theta$rho)^2) *
+    (
+      zetai * matlib::tr(J %*% loc %*% Psi_inv %*% t(loc)) -
+        2 * matlib::tr(J %*% loc %*% Psi_inv %*% t(amat)) +
+        ui * matlib::tr(J %*% amat %*% Psi_inv %*% t(amat))
+    )
+
+  # score_psi <- matrixcalc::vech(
+  #   -ni/2 * (Psi_inv) -
+  #   Psi_inv %*% t(loc) %*% Sigma_inv %*% amat %*% Psi_inv +
+  #   0.5*
+  #   (
+  #     zetai* (Psi_inv %*% t(loc) %*% Sigma_inv %*% loc %*% Psi_inv) +
+  #       ui * (Psi_inv %*% t(amat) %*% Sigma_inv %*% amat %*% Psi_inv)
+  #   )
+  # )
+  # browser()
+
+  score_psi <- t(matrixcalc::duplication.matrix(p)) %*%  matrixcalc::vec(
+    -ni/2 * (Psi_inv) -
+      Psi_inv %*% t(loc) %*% Sigma_inv %*% amat %*% Psi_inv +
+      0.5*
+      (
+        zetai* (Psi_inv %*% t(loc) %*% Sigma_inv %*% loc %*% Psi_inv) +
+          ui * (Psi_inv %*% t(amat) %*% Sigma_inv %*% amat %*% Psi_inv)
+      )
+  )
+  score_gamma <- log(theta$gamma) + 1 - digamma(theta$gamma) + (xii - ui)
+
+  c(unlist(score_theta), unlist(score_a), unlist(score_rho), unlist(score_psi), unlist(score_gamma))
+}
+
+s2i.mvnig.update <- function(Yi, Xi, ui, zetai, xii, theta) {
+  ni <- nrow(Yi)
+  p <- ncol(Yi)
+  Sigma_inv <- csform(ni, theta$rho, TRUE)
+  Psi_inv <- solve(theta$Psi)
+  amat <- a.mat(ni, theta$A)
+  rho <- rhofun(amat, Sigma_inv, Psi_inv)
+  delta <- deltafun(Yi, Xi, theta$Theta, Sigma_inv, Psi_inv)
+  ones <- rep(1,ni)
+  J <- matrix(1, nrow = ni, ncol = ni)
+  loc <- (Yi - Xi %*% theta$Theta)
+
+  score_theta <- -t(Psi_inv %*% t(amat) %*% Sigma_inv %*% Xi) + zetai * (t(Xi) %*% Sigma_inv %*% Yi %*% Psi_inv) -
+    zetai * (t(Xi) %*% Sigma_inv %*% Xi) %*% theta$Theta %*% Psi_inv
+
+  score_a <- Psi_inv %*% t(Yi - Xi %*% theta$Theta) %*% Sigma_inv %*% ones -
+    ui*Psi_inv %*% theta$A %*% t(ones) %*% Sigma_inv %*% ones
+
+  score_rho <- ni*p/2/(1-theta$rho) -
+    (p/2) * (ni/((1-ni + ni/(1-theta$rho)) * (1-theta$rho)^2)) - 0.5/(1-theta$rho)^2 *
+    (
+      zetai * matlib::tr(loc %*% Psi_inv %*% t(loc)) -
+        2 * matlib::tr(loc %*% Psi_inv %*% t(amat)) +
+        ui * matlib::tr(amat %*% Psi_inv %*% t(amat))
+    ) +
+    0.5 * (ni*theta$rho^2 - theta$rho^2 + 1)/((1-theta$rho)^2 * (1-theta$rho + ni*theta$rho)^2) *
+    (
+      zetai * matlib::tr(J %*% loc %*% Psi_inv %*% t(loc)) -
+        2 * matlib::tr(J %*% loc %*% Psi_inv %*% t(amat)) +
+        ui * matlib::tr(J %*% amat %*% Psi_inv %*% t(amat))
+    )
+
+  # score_psi <- matrixcalc::vech(
+  #   -ni/2 * (Psi_inv) -
+  #   Psi_inv %*% t(loc) %*% Sigma_inv %*% amat %*% Psi_inv +
+  #   0.5*
+  #   (
+  #     zetai* (Psi_inv %*% t(loc) %*% Sigma_inv %*% loc %*% Psi_inv) +
+  #       ui * (Psi_inv %*% t(amat) %*% Sigma_inv %*% amat %*% Psi_inv)
+  #   )
+  # )
+
+  score_psi <- t(matrixcalc::duplication.matrix(p)) %*%  matrixcalc::vec(
+    -ni/2 * (Psi_inv) -
+      Psi_inv %*% t(loc) %*% Sigma_inv %*% amat %*% Psi_inv +
+      0.5*
+      (
+        zetai* (Psi_inv %*% t(loc) %*% Sigma_inv %*% loc %*% Psi_inv) +
+          ui * (Psi_inv %*% t(amat) %*% Sigma_inv %*% amat %*% Psi_inv)
+      )
+  )
+
+  score_tgamma <- -theta$tgamma * ui + 1
+
+  c(unlist(score_theta), unlist(score_a), unlist(score_rho), unlist(score_psi), unlist(score_tgamma))
+}
+
+s2.mvvg.update <- function(Y, X, latentvars, theta) {
+  theta2 <- theta
+  theta2$Psi <- matrixcalc::vech(theta2$Psi)
+  ret <- unlist(theta2)*0
+  for (i in 1:length(Y)) {
+    ret <-
+      ret + s2i.mvvg.update(Y[[i]],
+                            X[[i]],
+                            latentvars$u[i],
+                            latentvars$zeta[i],
+                            latentvars$xi[i],
+                            theta)
+  }
+
+  ret
+}
+
+# par_score <- s2.mvvg.update(gaad_res, gaad_cov, mvvg_best_info$latentvars, mvvg_best_info$`Final Value`)
+#
+# num_score <- aux_score(gaad_res, gaad_cov, mvvg_best_info$latentvars, mvvg_best_info$`Final Value`, q2.mvvg.update, 8,2)
+
+s2.mvnig.update <- function(Y, X, latentvars, theta) {
+  theta2 <- theta
+  theta2$Psi <- matrixcalc::vech(theta2$Psi)
+  ret <- unlist(theta2)*0
+  for (i in 1:length(Y)) {
+    ret <-
+      ret + s2i.mvnig.update(Y[[i]],
+                             X[[i]],
+                             latentvars$u[i],
+                             latentvars$zeta[i],
+                             latentvars$xi[i],
+                             theta)
+  }
+
+  ret
+}
+
+dsigmai_inv <- function(rho, ni){
+  1/(1-rho)^2 *
+    (diag(ni) -
+       ((ni - 1)*rho^2 + 1)/((ni - 1) * rho + 1)^2*
+       matrix(1,ni,ni)
+    )
+}
+
+dsigmai_inv2 <- function(rho, ni){
+  2/(rho-1)^3 * (
+    ((ni^2)*rho^3 + ni * (-2 * rho^3 + 3*rho - 1) + rho^3 - 3*rho + 2)/
+      ((ni - 1)*rho + 1)^3 * matrix(1,ni,ni) -
+      diag(ni)
+  )
+}
+
+dsigmai_det <- function(rho, ni){
+  -ni/(1-rho) + ni/((1- ni + ni/(1-rho)) * (1-rho)^2)
+}
+
+dsigmai_det2 <- function(rho, ni){
+  -ni/(1-rho)^2 + (
+    ni*(ni*(2*rho - 1) - 2*rho + 2)/
+      ((1-rho)^2 * ((ni-1) * rho + 1)^2)
+  )
+}
+
+hess_vartheta_vartheta <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+
+    -zetai * (Psi_inv %x% (t(Xi) %*% Sigma_inv %*% Xi))
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_vartheta_a <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+
+    - (Psi_inv %x% (t(Xi) %*% Sigma_inv %*% rep(1,ni)))
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_vartheta_rho <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+
+    - matrixcalc::vec(t(Xi) %*% dsigma_inv %*% Ai %*% Psi_inv) -
+      #0.5 * 2 *
+      zetai *( matrixcalc::vec(t(Xi) %*% dsigma_inv %*% Xi %*% Theta %*% Psi_inv) - matrixcalc::vec(t(Psi_inv %*% t(Yi) %*% dsigma_inv %*% Xi))
+      )
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_vartheta_psi <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    loc <- Yi - Xi %*% Theta
+
+    # ((Psi_inv %x% (t(Xi) %*% Sigma_inv %*% Ai %*% Psi_inv))  +
+    # zetai * ((Psi_inv %x%
+    #             (t(Xi) %*% Sigma_inv %*% Xi %*% Theta %*% Psi_inv)) -
+    #            (Psi_inv %x%
+    #               (t(Xi) %*% Sigma_inv %*% Yi %*% Psi_inv))
+    #          )
+    #   ) %*%
+    # dup_p
+
+    (Psi_inv %x% (t(Xi) %*% Sigma_inv %*% Ai %*% Psi_inv - zetai * t(Xi) %*% Sigma_inv %*% loc %*% Psi_inv))  %*%
+      dup_p
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_a_a <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+    - ui *  (t(ones) %*% Sigma_inv %*% ones)[1] * Psi_inv
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_a_rho <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+
+    Psi_inv %*% t(Yi - Xi %*% Theta) %*% dsigma_inv %*% ones -
+      ui * Psi_inv %*% t(Ai) %*% dsigma_inv %*% ones
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_a_psi <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+
+    #    -((t(ones) %*% Sigma_inv %*% (Yi - Xi %*% Theta) %*% Psi_inv) %x% Psi_inv) %*% dup_p
+    # + ui *  ((t(ones) %*% Sigma_inv %*% Ai %*% Psi_inv) %x% Psi_inv) %*% dup_p
+
+    ((-t(ones) %*% Sigma_inv %*% (Yi - Xi %*% Theta) %*% Psi_inv + ui*t(ones) %*% Sigma_inv %*% Ai %*% Psi_inv) %x% Psi_inv)  %*% dup_p
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_rho_rho <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv2 <- dsigmai_inv2(rho, ni)
+    dsigma_det2 <- dsigmai_det2(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+
+    matrix(
+      -p/2 * dsigma_det2 -
+        0.5 *  (zetai * matlib::tr(dsigma_inv2 %*% (Yi - Xi %*% Theta) %*% Psi_inv %*% t(Yi - Xi %*% Theta)) -
+                  2 * matlib::tr(dsigma_inv2 %*% (Yi - Xi %*% Theta) %*% Psi_inv %*% t(Ai)) +
+                  ui * matlib::tr(dsigma_inv2 %*% Ai %*% Psi_inv %*% t(Ai))
+        )
+    )
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_rho_psi <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+    loc <- Yi - Xi %*% Theta
+
+
+    (-t(matrixcalc::vec(Psi_inv %*% t(loc) %*% dsigma_inv %*% Ai %*% Psi_inv)) +
+        0.5 * (zetai * t(matrixcalc::vec(Psi_inv %*% t(loc) %*% dsigma_inv %*% loc %*% Psi_inv)) +
+                 ui * t(matrixcalc::vec(Psi_inv %*% t(Ai) %*% dsigma_inv %*% Ai %*% Psi_inv)))
+    ) %*% dup_p
+
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_psi_psi <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+    loc <- Yi - Xi %*% Theta
+
+    t(dup_p) %*% ((ni/2 * Psi_inv +
+                     t(Psi_inv %*% t(Ai) %*% Sigma_inv %*% loc %*% Psi_inv) +
+                     (Psi_inv %*% t(Ai) %*% Sigma_inv %*% loc %*% Psi_inv) -
+                     zetai * (Psi_inv %*% t(loc) %*% Sigma_inv %*% loc %*% Psi_inv) -
+                     ui * (Psi_inv %*% t(Ai) %*% Sigma_inv %*% Ai %*% Psi_inv)) %x% Psi_inv) %*%
+      dup_p
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+hess_gamma_gamma <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+    loc <- Yi - Xi %*% Theta
+
+    matrix(1/gamma - trigamma(gamma))
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+
+
+hess_tgamma_tgamma <- function(Y,X,latentvars,vartheta, a, rho, psi, gamma = NULL, tgamma = NULL, dist){
+
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+  vecpsi <- matrixcalc::duplication.matrix(p) %*% psi
+  Psi <- matrix(vecpsi, p,p)
+  Psi_inv <- solve(Psi)
+  Theta <- matrix(vartheta, q,p)
+  n <- length(Y)
+
+  term_i <- mapply(function(Yi,Xi,ui, zetai, xii){
+    ni <- nrow(Yi)
+    Sigma_inv <- csform(ni, rho, inv = TRUE)
+    dsigma_inv <- dsigmai_inv(rho, ni)
+    Ai <- a.mat(ni, a)
+    dup_p <- matrixcalc::duplication.matrix(p)
+    ones <- rep(1, ni)
+    loc <- Yi - Xi %*% Theta
+
+    matrix(-ui)
+
+  }, Y,X,latentvars$u, latentvars$zeta, latentvars$xi, SIMPLIFY = FALSE)
+
+  purrr::reduce(term_i, `+`)
+
+}
+
+q2.hessian <- function(Y,X,theta, latentvars, dist = "mvn"){
+  n <- length(Y)
+  p <- ncol(Y[[1]])
+  q <- ncol(X[[1]])
+
+    a <- theta$A
+
+  # browser()
+  vartheta <- matrixcalc::vec(theta$Theta)
+  rho <- theta$rho
+  psi <- matrixcalc::vech(theta$Psi)
+  gamma <- theta$gamma
+  tgamma <- theta$tgamma
+
+
+
+  if(dist == "mvn"){
+    hessfuncs <- list(list(hess_vartheta_vartheta, hess_vartheta_rho, hess_vartheta_psi),
+                      list(hess_rho_rho, hess_rho_psi),
+                      list(hess_psi_psi))
+  } else {
+    hessfuncs <- list(list(hess_vartheta_vartheta, hess_vartheta_a, hess_vartheta_rho,
+                           hess_vartheta_psi),
+                      list(hess_a_a, hess_a_rho, hess_a_psi),
+                      list(hess_rho_rho, hess_rho_psi),
+                      list(hess_psi_psi))
+  }
+  hessmat <- list()
+  for(i in hessfuncs){
+    hessrow <- list()
+    for(fun in i){
+
+      hessrow <- c(hessrow, list(fun(Y,X,latentvars,vartheta,a,rho,psi,gamma,tgamma,dist))
+      )
+    }
+    rowmat <- tryCatch(purrr::reduce(hessrow, cbind), error = function(e){browser()})
+    hessmat <- c(hessmat, list(rowmat))
+  }
+  retmat <- purrr::reduce(hessmat, rbind0)
+
+
+  if(dist == "mvvg"){
+    retmat <- cbind(retmat, 0)
+    retmat <- rbind0(retmat, hess_gamma_gamma(Y,X,latentvars,vartheta,a,rho,psi,gamma,tgamma,dist))
+  } else if(dist == "mvnig"){
+    retmat <- cbind(retmat, 0)
+    retmat <- rbind0(retmat, hess_tgamma_tgamma(Y,X,latentvars,vartheta,a,rho,psi,gamma,tgamma,dist))
+  }
+
+  retmat[lower.tri(retmat)] <- 0
+  retmat <- retmat + t(retmat) - diag(diag(retmat))
+  retmat
 }
 
 # update all latent variables for all subjects (mvgh)
@@ -886,7 +1550,7 @@ omega.update <- function(Y, X, latentvars, theta) {
 
 ## mvvg specific functions
 
-# test both update functions then run aecm then sims
+# test both update functions then run ECM then sims
 
 rho.mvvg.logl <- function(rho, Y, X, params) {
   theta <- params
@@ -1128,21 +1792,22 @@ cmupdate <- function(cycle, Y, X, latentvars, theta, dist) {
 }
 
 
-
-
 # return function, just for aggregating output
-aecmreport <- function(i, theta_g, theta, qfinal, dist) {
+ECMreport <- function(i, theta_g, theta, qfinal, dist,latentvars) {
   list(
-    "Iteration" = i,
+    Iteration = i,
     "Starting Value" = theta_g,
     "Final Value" = theta,
     "Stopping Criteria" = qfinal,
-    Distribution = dist
+    Distribution=dist,
+    latentvars = latentvars
   )
 }
 
 
-aecm_mvgh <-
+
+
+ECM_mvgh <-
   function(Y,
            X,
            theta_g = NULL,
@@ -1229,7 +1894,7 @@ aecm_mvgh <-
           error = function(e) {
             print(e)
             # browser()
-            return(aecmreport(-1, theta_g, theta, linfhist, dist))
+            return(ECMreport(-1, theta_g, theta, linfhist, latentvars))
 
           }
         )
@@ -1262,19 +1927,19 @@ aecm_mvgh <-
       #diff <- abs(c(-1, 1) %*% utils::tail(linfhist, 2))
       if (linf_i < stopping || (i > 10 && linf_i > thresh)) {
         #browser()
-        return(aecmreport(i, theta_g, theta, linfhist, dist))
+        return(ECMreport(i, theta_g, theta, linfhist, dist, latentvars))
       }
 
 
       # qhist <- rbind(qhist, qhistrow)
       # maxdiff <- max(qdiff)
       # if (maxdiff < stopping & maxdiff > 0) {
-      #   return(aecmreport(i, theta_g,theta, qhist))
+      #   return(ECMreport(i, theta_g,theta, qhist))
       #}
 
     }
     # worst case: no convergence
-    aecmreport(Inf, theta_g, theta, linfhist, dist)
+    ECMreport(Inf, theta_g, theta, linfhist, dist, latentvars)
   }
 
 #
@@ -1297,7 +1962,7 @@ aecm_mvgh <-
 #
 #
 #   # You stopped here
-#   aecm_mvgh(Y,X,theta_g, dist, stopping = stopping, thresh = Inf, iter = max_iter)
+#   ECM_mvgh(Y,X,theta_g, dist, stopping = stopping, thresh = Inf, iter = max_iter)
 #
 #}
 
@@ -1336,7 +2001,7 @@ BIC <- function(dist, Y, X, theta) {
 
 
 
-#' AECM Estimation for Matrix-Variate Variance Gamma (MVVG) Models
+#' ECM Estimation for Matrix-Variate Variance Gamma (MVVG) Models
 #'
 #' This function fits MVVG linear models for matrix-variate skew data with non-uniform data rows between subjects. Exchangeable observation row correlation
 #'   and skewness structures are imposed to accommodate the varying row counts
@@ -1345,7 +2010,7 @@ BIC <- function(dist, Y, X, theta) {
 #'
 #' @param Y List of \eqn{n_i \times p} response matrices. Matrices must have same number of columns.
 #' @param X List of \eqn{n_i \times q} design matrices. Matrices must have same number of columns.
-#' @param theta_g List of parameters to pass as initial values in the AECM algorithm.
+#' @param theta_g List of parameters to pass as initial values in the ECM algorithm.
 #'  If NULL, will be randomly generated. See Details for an in-depth explanation.
 #' @param stopping Stopping threshold for the L-infinity norm of differences in consecutive parameter space, evaluated at iteration \eqn{t+1} as
 #' \eqn{|\hat\theta^{t+1} - \hat\theta^{t}|_\infty}. Default is 0.001
@@ -1357,9 +2022,9 @@ BIC <- function(dist, Y, X, theta) {
 #'
 #' where each response \eqn{Y_i} is a \eqn{n_i \times p} matrix that indexes \eqn{n_i} observations and \eqn{p} response variables. \eqn{X_i} corresponds to a \eqn{n_i \times q} design matrix, and \eqn{\Theta} corresponds to a \eqn{q \times p} coefficient matrix. \eqn{E_i} corresponds to a \eqn{n_i \times p} error matrix, following a matrix-variate variance-gamma distribution.
 #'
-#' The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \gamma} using the alternating expectation conditional maximization (AECM) algorithm, using the density
+#' The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \gamma} using the alternating expectation conditional maximization (ECM) algorithm, using the density
 #'
-#' \deqn{f(Y_i| X_i\Theta,\underline{a},r, \Psi, \gamma, n_i, p) = \dfrac{2\gamma^\gamma \exp[matlib::tr(\Sigma_i^{-1}(Y_i- X_i\Theta)\Psi^{-1}A_i^T)]}{(2\pi)^{n_ip/2} |\Sigma_i|^{p/2} |\Psi|^{n_i/2} \Gamma(\gamma)} \bigg( \dfrac{\delta(Y_i;  X_i\Theta, \Sigma_i, \Psi)}{\rho (A_i, \Sigma_i,\Psi) + 2\gamma} \bigg)^{(\gamma - n_ip/2)/2} \\ \times K_{(\gamma - n_ip/2)} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + 2\gamma][\delta(Y_i; X_i\Theta,\Sigma_i,\Psi)]} \big),}
+#' \deqn{f(Y_i| X_i\Theta,\underline{a},r, \Psi, \gamma, n_i, p) = \dfrac{2\gamma^\gamma \exp[tr(\Sigma_i^{-1}(Y_i- X_i\Theta)\Psi^{-1}A_i^T)]}{(2\pi)^{n_ip/2} |\Sigma_i|^{p/2} |\Psi|^{n_i/2} \Gamma(\gamma)} \bigg( \dfrac{\delta(Y_i;  X_i\Theta, \Sigma_i, \Psi)}{\rho (A_i, \Sigma_i,\Psi) + 2\gamma} \bigg)^{(\gamma - n_ip/2)/2} \\ \times K_{(\gamma - n_ip/2)} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + 2\gamma][\delta(Y_i; X_i\Theta,\Sigma_i,\Psi)]} \big),}
 #'
 #' where \eqn{A_i = \underline{1}_{n_i} \times \underline{a}^T}, \eqn{\Sigma_i = I_{n_i} + r(\underline{1}_{n_i}\underline{1}_{n_i}^T - I_{n_i})},
 #'  \eqn{\delta(X;M, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}(X-M)\Psi^{-1}(X-M)^T)}, \eqn{\rho(A, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}A\Psi^{-1}A^T)}, and \eqn{K_{\nu}(x)} is the modified Bessel function of the second kind.
@@ -1374,7 +2039,7 @@ BIC <- function(dist, Y, X, theta) {
 #'  \item{`gamma`: }{Univariate mixing parameter}
 #'}
 #'
-#' @return MVVGmod returns a list with the following elements:
+#' @return \code{MVVGmod} returns a list with the following elements:
 #'
 #' \describe{
 #'  \item{`Iteration`: }{Number of iterations taken to convergence. `Inf` if convergence not reached.}
@@ -1395,18 +2060,6 @@ BIC <- function(dist, Y, X, theta) {
 #' @examples
 #' MVVGmod(Y,X,theta_mvvg)
 #'
-#' \donttest{set.seed(1234)
-#' # num response variables
-#' p <- ncol(gaad_res[[1]])
-#' # num covariates
-#' q <- ncol(gaad_cov[[1]])
-#' # generate initial value to input, then run AECM with MVVG distribution
-#' initial_gaad_theta_mvvg <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
-#'                       A = rep(1,p),
-#'                      rho = 0.3,
-#'                      Psi = diag(p),
-#'                      gamma = 4)
-#' MVVGmod(gaad_res[1:10], gaad_cov[1:10], initial_gaad_theta_mvvg)}
 #'
 MVVGmod <- function(Y,
                     X,
@@ -1422,7 +2075,7 @@ MVVGmod <- function(Y,
   }
 
 
-  ret <- aecm_mvgh(
+  ret <- ECM_mvgh(
     Y,
     X,
     theta_g,
@@ -1440,7 +2093,7 @@ MVVGmod <- function(Y,
 }
 
 
-#' AECM Estimation for Matrix-Variate Normal-Inverse Gaussian Models
+#' ECM Estimation for Matrix-Variate Normal-Inverse Gaussian Models
 #'
 #' This function fits MVNIG linear models for matrix-variate skew data with non-uniform data rows between subjects. Exchangeable observation row correlation
 #'   and skewness structures are imposed to accommodate the varying row counts
@@ -1449,7 +2102,7 @@ MVVGmod <- function(Y,
 #'
 #' @param Y List of \eqn{n_i \times p} response matrices. Matrices must have same number of columns.
 #' @param X List of \eqn{n_i \times q} design matrices. Matrices must have same number of columns.
-#' @param theta_g List of parameters to pass as initial values in the AECM algorithm.
+#' @param theta_g List of parameters to pass as initial values in the ECM algorithm.
 #'  If NULL, will be randomly generated. See Details for an in-depth explanation.
 #' @param stopping Stopping threshold for the L-infinity norm of differences in consecutive parameter space, evaluated at iteration \eqn{t+1} as
 #' \eqn{|\hat\theta^{t+1} - \hat\theta^{t}|_\infty}. Default is 0.001
@@ -1461,9 +2114,9 @@ MVVGmod <- function(Y,
 #'
 #' where each response \eqn{Y_i} is a \eqn{n_i \times p} matrix that indexes \eqn{n_i} observations and \eqn{p} response variables. \eqn{X_i} corresponds to a \eqn{n_i \times q} design matrix, and \eqn{\Theta} corresponds to a \eqn{q \times p} coefficient matrix. \eqn{E_i} corresponds to a \eqn{n_i \times p} error matrix, following a matrix-variate variance-gamma distribution.
 #'
-#' The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \tilde\gamma} using the alternating expectation conditional maximization (AECM) algorithm, using the density
+#' The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \tilde\gamma} using the alternating expectation conditional maximization (ECM) algorithm, using the density
 #'
-#' \deqn{f(Y_i|M_i,\underline{a},r, \Psi, \tilde\gamma, n_i, p) = \dfrac{2 \exp[matlib::tr(\Sigma_i^{-1}(Y_i-M_i)\Psi^{-1}A_i^T) + \tilde\gamma]}{(2\pi)^{\frac{n_ip}{2} + 1} |\Sigma_i|^{\frac{p}{2}} |\Psi|^{\frac{n_i}{2}}} \bigg( \dfrac{\delta(Y_i; M_i, \Sigma_i, \Psi) + 1}{\rho (A_i, \Sigma_i,\Psi) + \tilde\gamma^2} \bigg)^{-\frac{(1+n_ip)}{4}} \\ \times K_{-\frac{(1+n_ip)}{2}} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + \tilde\gamma^2][\delta(Y_i;M_i,\Sigma_i,\Psi) + 1]} \big),}
+#' \deqn{f(Y_i|M_i,\underline{a},r, \Psi, \tilde\gamma, n_i, p) = \dfrac{2 \exp[tr(\Sigma_i^{-1}(Y_i-M_i)\Psi^{-1}A_i^T) + \tilde\gamma]}{(2\pi)^{\frac{n_ip}{2} + 1} |\Sigma_i|^{\frac{p}{2}} |\Psi|^{\frac{n_i}{2}}} \bigg( \dfrac{\delta(Y_i; M_i, \Sigma_i, \Psi) + 1}{\rho (A_i, \Sigma_i,\Psi) + \tilde\gamma^2} \bigg)^{-\frac{(1+n_ip)}{4}} \\ \times K_{-\frac{(1+n_ip)}{2}} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + \tilde\gamma^2][\delta(Y_i;M_i,\Sigma_i,\Psi) + 1]} \big),}
 #'
 #' where \eqn{A_i = \underline{1}_{n_i} \times \underline{a}^T}, \eqn{\Sigma_i = I_{n_i} + r(\underline{1}_{n_i}\underline{1}_{n_i}^T - I_{n_i})},
 #'  \eqn{\delta(X;M, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}(X-M)\Psi^{-1}(X-M)^T)}, \eqn{\rho(A, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}A\Psi^{-1}A^T)}, and \eqn{K_{\nu}(x)} is the modified Bessel function of the second kind.
@@ -1478,7 +2131,7 @@ MVVGmod <- function(Y,
 #'  \item{`tgamma`: }{Univariate mixing parameter}
 #'}
 #'
-#' @return MVNIGmod returns a list with the following elements:
+#' @return \code{MVNIGmod} returns a list with the following elements:
 #'
 #' \describe{
 #'  \item{`Iteration`: }{Number of iterations taken to convergence. `Inf` if convergence not reached.}
@@ -1500,18 +2153,6 @@ MVVGmod <- function(Y,
 #'
 #' MVNIGmod(Y,X,theta_mvnig)
 #'
-#' \donttest{set.seed(1234)
-#' # num response variables
-#' p <- ncol(gaad_res[[1]])
-#' # num covariates
-#' q <- ncol(gaad_cov[[1]])
-#' # generate initial value to input, then run AECM with MVVG distribution
-#' initial_mvnig_theta <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
-#'                       A = rep(1,p),
-#'                      rho = 0.3,
-#'                      Psi = diag(p),
-#'                      tgamma = 3)
-#' MVNIGmod(gaad_res[1:10], gaad_cov[1:10], initial_mvnig_theta)}
 #'
 MVNIGmod <- function(Y,
                      X,
@@ -1527,7 +2168,7 @@ MVNIGmod <- function(Y,
   }
 
 
-  ret <- aecm_mvgh(
+  ret <- ECM_mvgh(
     Y,
     X,
     theta_g,
@@ -1574,11 +2215,11 @@ mv_predict <- function(X, theta, dist) {
 
 #' MVNG Model Prediction
 #'
-#' Predicts response values given a list of covariate matrices and a model output from either MVVGmod or MVNIGmod.
+#' Predicts response values given a list of covariate matrices and a model output from either \code{MVVGmod} or \code{MVNIGmod}.
 #'
 #'
 #' @param X Inputted covariate matrix
-#' @param mod object outputted by either MVVGmod or MVNIGmod
+#' @param mod object outputted by either \code{MVVGmod} or \code{MVNIGmod}
 #' @return Returns a list of predicted response matrices
 #' @export
 
@@ -1588,19 +2229,9 @@ mv_predict <- function(X, theta, dist) {
 #'
 #' @examples
 #' \donttest{set.seed(1234)
-#' # num response variables
-#' p <- ncol(gaad_res[[1]])
-#' # num covariates
-#' q <- ncol(gaad_cov[[1]])
-#' # generate initial value to input, then run AECM with MVVG distribution
-#' initial_mvnig_theta <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
-#'                       A = rep(1,p),
-#'                      rho = 0.3,
-#'                      Psi = diag(p),
-#'                      tgamma = 4)
-#' mvnig_mod <- MVNIGmod(gaad_res[1:10], gaad_cov[1:10], initial_mvnig_theta)
+#' mvnig_mod <- MVNIGmod(Y,X,theta_mvnig)
 #'
-#' predict(mvnig_mod, gaad_cov[1:10])}
+#' predict(mvnig_mod,X)}
 predict <- function(mod, X) {
   theta <- mod$`Final Value`
   if (!is.null(theta$gamma)) {
@@ -1608,6 +2239,105 @@ predict <- function(mod, X) {
   } else{
     mv_predict(X, theta, "mvnig")
   }
+}
+
+# test this when back
+case_deletion_aux <- function(Y, X, latentvars, theta,   scale = FALSE){
+
+  nparam <-  nrow(theta$Theta)
+  nresp <-  ncol(theta$Theta)
+
+  if(is.null(theta$gamma)){
+    dist <- "mvnig"
+    func <- q2.mvnig.update
+    aux_score <- s2.mvnig.update
+  }  else {
+    dist <- "mvvg"
+    func <- q2.mvvg.update
+    aux_score <- s2.mvvg.update
+  }
+
+  aux_lik <- function(theta_vec, Y,X,latentvars, lik, nparam, nresp){
+
+
+      thetamat <- reconstitute(theta_vec,nparam, nresp)
+      lik(Y,X, latentvars, thetamat)
+
+  }
+
+
+  # estimate overall hessian
+  aux_hessian <- function(Y,X,latentvars, theta, lik, nparam, nresp){
+
+
+    q2.hessian(Y,X,theta, latentvars, dist)
+
+  }
+
+
+
+
+
+    del_scores <- lapply(1:length(Y), function(x){
+      y_del <- Y[-c(x)]
+      x_del <- X[-c(x)]
+      lat_del <- lapply(latentvars, function(x2){x2[-c(x)]})
+      aux_score(y_del, x_del, lat_del, theta)
+      # , func, nparam, nresp)
+    })
+
+
+
+
+  hess <-  (aux_hessian(Y,X,latentvars, theta, func, nparam, nresp))
+  inv_hess <- tryCatch(-chol2inv(chol(-hess)), error = function(e){chol2inv(chol(hess))})
+
+
+
+  theta_vec <- reconstitute(unlist(theta), nparam, nresp)
+    theta_vec$Psi <- matrixcalc::vech(theta_vec$Psi)
+  theta_vec <- unlist(theta_vec)
+
+  cook_d <- lapply(del_scores, function(x){
+    theta_del <- theta_vec - inv_hess %*% x
+    theta_diff <- theta_del - theta_vec
+    -t(x) %*% inv_hess %*% x
+  })
+
+  cook_d
+
+}
+
+#' Case Deletion for MVNG Models
+#'
+#' This function calculates influence statistics for each element of the data list using a one-step approximation to the generalized Cook's distance.
+#'
+#'
+#'
+#' @param Y List of \eqn{n_i \times p} response matrices. Matrices must have same number of columns.
+#' @param X List of \eqn{n_i \times q} design matrices. Matrices must have same number of columns.
+#' @param mod Model object returned by a call to \code{MVVGmod} or \code{MVNIGmod}.
+#' @details
+#' Computes influence statistics for the MVVG and MVNIG models using a one-step approximation to the generalized Cook's distance, based on the score and hessian matrices of the complete-data log-likelihood.
+#'
+#' \deqn{GD_i^1(\theta) = \dot Q_{[i]}(\hat\theta|\hat\theta)^T [-\ddot Q(\hat\theta|\hat\theta)]^{-1}\dot Q_{[i]}(\hat\theta|\hat\theta),}
+#'
+#' where \deqn{\dot Q_{[i]}(\hat\theta|\hat\theta) = \frac{\partial Q_{[i]}(\theta|\hat\theta)}{\partial\theta}|_{\theta = \hat\theta}} is the complete-data score function with the \eqn{i}th subject deleted and evaluated in \eqn{\hat\theta}, and \deqn{\ddot Q(\hat\theta|\hat\theta) = \frac{\partial^2 Q(\theta|\hat\theta)}{\partial\theta \partial\theta^T}|_{\theta = \hat\theta}} is the complete-data Hessian matrix, as given in Lachos \emph{et al.} (2015) \doi{10.1016/j.jmva.2015.06.014}
+#'
+#' @return case_del returns a vector containing the approximate generalized Cook's distance for each corresponding subject in the provided dataset.
+
+#' @author Samuel Soon
+#' @author Dipankar Bandyopadhyay
+#' @author Qingyang Liu
+#'
+#' @export
+#'
+#' @examples
+#' mod <- MVNIGmod(Y,X,theta_mvnig)
+#' case_del(Y,X,mod)
+#'
+case_del <- function(Y, X, mod){
+  unlist(case_deletion_aux(Y,X,mod$latentvars, mod$`Final Value`))
 }
 
 # mod_aic <- function(loglik, Y,X,theta){
@@ -1671,7 +2401,7 @@ predict <- function(mod, X) {
 #'
 #' Part of toy dataset for examples.
 #'
-#' @format List of parameters for input to MVVGmod function
+#' @format List of parameters for input to \code{MVVGmod} function
 #' @examples
 #' theta_mvvg
 "theta_mvvg"
@@ -1680,11 +2410,22 @@ predict <- function(mod, X) {
 #'
 #' Part of toy dataset for examples.
 #'
-#' @format List of parameters for input to MVNIGmod function
+#' @format List of parameters for input to \code{MVNIGmod} function
 #' @examples
 #' theta_mvvg
 "theta_mvnig"
 
-
+# \donttest{set.seed(1234)
+# # num response variables
+# p <- ncol(gaad_res[[1]])
+# # num covariates
+# q <- ncol(gaad_cov[[1]])
+# # generate initial value to input, then run ECM with MVVG distribution
+# initial_gaad_theta_mvvg <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
+#                       A = rep(1,p),
+#                      rho = 0.3,
+#                      Psi = diag(p),
+#                      gamma = 4)
+# \code{MVVGmod}(gaad_res[1:10], gaad_cov[1:10], initial_gaad_theta_mvvg)}
 
 

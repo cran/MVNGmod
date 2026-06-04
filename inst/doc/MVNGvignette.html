@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8" />
+<meta name="generator" content="pandoc" />
+<meta http-equiv="X-UA-Compatible" content="IE=EDGE" />
+
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+
+
+<title>Modeling Matrix-Variate Non-Gaussian Distributions</title>
+
+<script>// Pandoc 2.9 adds attributes on both header and div. We remove the former (to
+// be compatible with the behavior of Pandoc < 2.8).
+document.addEventListener('DOMContentLoaded', function(e) {
+  var hs = document.querySelectorAll("div.section[class*='level'] > :first-child");
+  var i, h, a;
+  for (i = 0; i < hs.length; i++) {
+    h = hs[i];
+    if (!/^h[1-6]$/i.test(h.tagName)) continue;  // it should be a header h1-h6
+    a = h.attributes;
+    while (a.length > 0) h.removeAttribute(a[0].name);
+  }
+});
+</script>
+
+<style type="text/css">
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+span.underline{text-decoration: underline;}
+div.column{display: inline-block; vertical-align: top; width: 50%;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+</style>
+
+
+
+<style type="text/css">
+code {
+white-space: pre;
+}
+.sourceCode {
+overflow: visible;
+}
+</style>
+<style type="text/css" data-origin="pandoc">
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+<script>
+// apply pandoc div.sourceCode style to pre.sourceCode instead
+(function() {
+  var sheets = document.styleSheets;
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].ownerNode.dataset["origin"] !== "pandoc") continue;
+    try { var rules = sheets[i].cssRules; } catch (e) { continue; }
+    var j = 0;
+    while (j < rules.length) {
+      var rule = rules[j];
+      // check if there is a div.sourceCode rule
+      if (rule.type !== rule.STYLE_RULE || rule.selectorText !== "div.sourceCode") {
+        j++;
+        continue;
+      }
+      var style = rule.style.cssText;
+      // check if color or background-color is set
+      if (rule.style.color === '' && rule.style.backgroundColor === '') {
+        j++;
+        continue;
+      }
+      // replace div.sourceCode by a pre.sourceCode rule
+      sheets[i].deleteRule(j);
+      sheets[i].insertRule('pre.sourceCode{' + style + '}', j);
+    }
+  }
+})();
+</script>
+
+
+
+<style type="text/css">
+
+div.csl-bib-body { }
+div.csl-entry {
+clear: both;
+}
+.hanging div.csl-entry {
+margin-left:2em;
+text-indent:-2em;
+}
+div.csl-left-margin {
+min-width:2em;
+float:left;
+}
+div.csl-right-inline {
+margin-left:2em;
+padding-left:1em;
+}
+div.csl-indent {
+margin-left: 2em;
+}
+</style>
+
+<style type="text/css">body {
+background-color: #fff;
+margin: 1em auto;
+max-width: 700px;
+overflow: visible;
+padding-left: 2em;
+padding-right: 2em;
+font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+font-size: 14px;
+line-height: 1.35;
+}
+#TOC {
+clear: both;
+margin: 0 0 10px 10px;
+padding: 4px;
+width: 400px;
+border: 1px solid #CCCCCC;
+border-radius: 5px;
+background-color: #f6f6f6;
+font-size: 13px;
+line-height: 1.3;
+}
+#TOC .toctitle {
+font-weight: bold;
+font-size: 15px;
+margin-left: 5px;
+}
+#TOC ul {
+padding-left: 40px;
+margin-left: -1.5em;
+margin-top: 5px;
+margin-bottom: 5px;
+}
+#TOC ul ul {
+margin-left: -2em;
+}
+#TOC li {
+line-height: 16px;
+}
+table {
+margin: 1em auto;
+border-width: 1px;
+border-color: #DDDDDD;
+border-style: outset;
+border-collapse: collapse;
+}
+table th {
+border-width: 2px;
+padding: 5px;
+border-style: inset;
+}
+table td {
+border-width: 1px;
+border-style: inset;
+line-height: 18px;
+padding: 5px 5px;
+}
+table, table th, table td {
+border-left-style: none;
+border-right-style: none;
+}
+table thead, table tr.even {
+background-color: #f7f7f7;
+}
+p {
+margin: 0.5em 0;
+}
+blockquote {
+background-color: #f6f6f6;
+padding: 0.25em 0.75em;
+}
+hr {
+border-style: solid;
+border: none;
+border-top: 1px solid #777;
+margin: 28px 0;
+}
+dl {
+margin-left: 0;
+}
+dl dd {
+margin-bottom: 13px;
+margin-left: 13px;
+}
+dl dt {
+font-weight: bold;
+}
+ul {
+margin-top: 0;
+}
+ul li {
+list-style: circle outside;
+}
+ul ul {
+margin-bottom: 0;
+}
+pre, code {
+background-color: #f7f7f7;
+border-radius: 3px;
+color: #333;
+white-space: pre-wrap; 
+}
+pre {
+border-radius: 3px;
+margin: 5px 0px 10px 0px;
+padding: 10px;
+}
+pre:not([class]) {
+background-color: #f7f7f7;
+}
+code {
+font-family: Consolas, Monaco, 'Courier New', monospace;
+font-size: 85%;
+}
+p > code, li > code {
+padding: 2px 0px;
+}
+div.figure {
+text-align: center;
+}
+img {
+background-color: #FFFFFF;
+padding: 2px;
+border: 1px solid #DDDDDD;
+border-radius: 3px;
+border: 1px solid #CCCCCC;
+margin: 0 5px;
+}
+h1 {
+margin-top: 0;
+font-size: 35px;
+line-height: 40px;
+}
+h2 {
+border-bottom: 4px solid #f7f7f7;
+padding-top: 10px;
+padding-bottom: 2px;
+font-size: 145%;
+}
+h3 {
+border-bottom: 2px solid #f7f7f7;
+padding-top: 10px;
+font-size: 120%;
+}
+h4 {
+border-bottom: 1px solid #f7f7f7;
+margin-left: 8px;
+font-size: 105%;
+}
+h5, h6 {
+border-bottom: 1px solid #ccc;
+font-size: 105%;
+}
+a {
+color: #0033dd;
+text-decoration: none;
+}
+a:hover {
+color: #6666ff; }
+a:visited {
+color: #800080; }
+a:visited:hover {
+color: #BB00BB; }
+a[href^="http:"] {
+text-decoration: underline; }
+a[href^="https:"] {
+text-decoration: underline; }
+
+code > span.kw { color: #555; font-weight: bold; } 
+code > span.dt { color: #902000; } 
+code > span.dv { color: #40a070; } 
+code > span.bn { color: #d14; } 
+code > span.fl { color: #d14; } 
+code > span.ch { color: #d14; } 
+code > span.st { color: #d14; } 
+code > span.co { color: #888888; font-style: italic; } 
+code > span.ot { color: #007020; } 
+code > span.al { color: #ff0000; font-weight: bold; } 
+code > span.fu { color: #900; font-weight: bold; } 
+code > span.er { color: #a61717; background-color: #e3d2d2; } 
+</style>
+
+
+
+
+</head>
+
+<body>
+
+
+
+
+<h1 class="title toc-ignore">Modeling Matrix-Variate Non-Gaussian
+Distributions</h1>
+
+
+
+<!-- This document describes a ECM-based method linear modeling  -->
+<div id="about" class="section level2">
+<h2>About</h2>
+<p>The functions in this package are designed to handle ECM-based
+parameter estimation of models with error following a distribution of
+the matrix-variate non-Gaussian (MVNG) class. Currently, the
+matrix-variate extensions of the variance-gamma (MVVG) and
+normal-inverse Gaussian (MVNIG) distributions are implemented, along
+with subject-wise case deletion diagnostics for each model.</p>
+</div>
+<div id="modeling-matrix-variate-non-gaussian-distributions" class="section level2">
+<h2>Modeling Matrix-variate non-Gaussian Distributions</h2>
+<div id="matrix-variate-non-gaussian-distributions" class="section level3">
+<h3>Matrix-Variate Non-Gaussian Distributions</h3>
+<p>Matrix-variate non-Gaussian (MVNG) distributions are a class of
+distributions introduced by Gallaugher &amp; McNicholas <span class="citation">(Gallaugher and McNicholas 2018)</span>, which extend
+to two dimensions a number of multivariate distributions. Specifically,
+we extend a set of distributions stochastically tractable under normal
+variance-mean mixtures</p>
+<p><span class="math display">\[
+Y = \alpha  +\beta V \sqrt{V}W,
+\]</span> where <span class="math inline">\(\alpha, \beta\)</span> are
+constants, <span class="math inline">\(V\)</span> is a standard normal
+random variable, and <span class="math inline">\(W\)</span> is a
+non-negative random variable. <span class="math inline">\(W\)</span>
+follows the gamma distribution in the case of MVVG, and generalized
+inverse-Gaussian in the case of MVNIG. The extension to matrix-variate
+is performed by inserting an additional covariance parameter, which
+regulates between-response covariance.</p>
+</div>
+<div id="model" class="section level3">
+<h3>Model</h3>
+<p>The MVNG modeling equation is</p>
+<p><span class="math display">\[
+Y_i = X_i\Theta + E_i,
+\]</span></p>
+<p>where <span class="math inline">\(X_i\)</span> is an explanatory
+variable matrix, <span class="math inline">\(Y_i\)</span> is a matrix
+with response columns, <span class="math inline">\(\Theta\)</span>
+represents the corresponding coefficient matrix. <span class="math inline">\(E_i\)</span> follows the distribution family <span class="math inline">\(MVNG(0, \underline{a}, \rho, \Psi, ...)\)</span>,
+where <span class="math inline">\(\underline{a}\)</span> is a skewness
+vector corresponding to each row observation, <span class="math inline">\(\rho\)</span> represents the correlation parameter
+of the compound-symmetric row covariance matrix, and <span class="math inline">\(\Psi\)</span> is the response covariance matrix.
+Additional parameters endemic to each MVNG are also included based on
+the choice of <span class="math inline">\(W\)</span>. Model parameters
+are estimated using an ECM implementation, with multiple runs
+advised.</p>
+</div>
+<div id="case-deletion" class="section level3">
+<h3>Case-Deletion</h3>
+<p>When the data are well-approximated around a Gaussian distribution,
+outlying points tend to be easily distinguishable, and leverage
+statistics can be computed based on the observed likelihood. However,
+since MVNG models are ECM-based, direct calculation of Cook’s distances
+is computationally intensive. We instead provide a one-step
+approximation, and use the score and Hessian expressions of the ECM
+complete-data likelihoods <span class="citation">(Zhu et al.
+2001)</span> to derive the case-deleted model estimated</p>
+<p><span class="math display">\[
+    \hat\theta^1_{[i]} = \hat\theta - \ddot
+Q(\hat\theta|\hat\theta)^{-1} \dot Q_{[i]}(\hat\theta|\hat\theta)
+\]</span></p>
+<p>for each subject. Substituting this expression into the generalized
+Cook’s distance computation yields the expression,</p>
+<p><span class="math display">\[
+    GD_i^1(\theta) = \dot Q_{[i]}(\hat\theta|\hat\theta)^T [-\ddot
+Q(\hat\theta|\hat\theta)]^{-1}\dot Q_{[i]}(\hat\theta|\hat\theta).
+\]</span></p>
+<p>where <span class="math inline">\(\dot Q_{[i]}(\hat\theta|\hat\theta)
+= \frac{\partial Q_{[i]}(\theta|\hat\theta)}{\partial\theta}|_{\theta =
+\hat\theta}\)</span> is the complete-data score function with the <span class="math inline">\(i\)</span>th subject deleted and evaluated at
+<span class="math inline">\(\hat\theta\)</span>, and <span class="math inline">\(\ddot Q(\hat\theta|\hat\theta) = \frac{\partial^2
+Q(\theta|\hat\theta)}{\partial\theta \partial\theta^T}|_{\theta =
+\hat\theta}\)</span> is the complete-data Hessian matrix, as given in
+Lachos (2015) <span class="citation">(Matos et al. 2015)</span>.</p>
+</div>
+</div>
+<div id="data-input" class="section level2">
+<h2>Data Input</h2>
+<p>The current versions of the MVNG modeling functions solely accept
+lists of matrices as inputs for <span class="math inline">\(X\)</span>
+and <span class="math inline">\(Y\)</span>. <span class="math inline">\(X\)</span> represents the list of subject design
+matrices, while <span class="math inline">\(Y\)</span> should be a list
+of matrices, with each column indexing a single response variable.
+Modeling functions additionally allow arguments for the initial
+parameter estimate, tolerance, and maximum iterations.</p>
+</div>
+<div id="functions" class="section level2">
+<h2>Functions</h2>
+<div id="mvvg-model" class="section level3">
+<h3>MVVG Model</h3>
+<p>Fitting an MVVG model to the dataset can be performed using the
+following function call. Returned values include the number of
+iterations at convergence, initial parameter estimate, final parameter
+estimate, L-infinity norm of the change in parameter space across each
+iteration, model AIC, and model BIC. The parameter space of the model
+includes the endemic parameter <span class="math inline">\(\gamma\)</span> in addition to <span class="math inline">\(\Theta, \underline{a}, \rho, \Psi\)</span>.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" tabindex="-1"></a><span class="fu">MVVGmod</span>(Y,X, <span class="at">theta_g =</span> theta_mvvg, <span class="at">stopping =</span> <span class="fl">0.001</span>, <span class="at">max_iter =</span> <span class="dv">50</span>)</span></code></pre></div>
+</div>
+<div id="mvnig-model" class="section level3">
+<h3>MVNIG Model</h3>
+<p>A MVNIG model can be fit to a dataset in the same way as the MVVG
+model, using the following function call. The parameter space remains
+identical, except that the endemic parameter <span class="math inline">\(\gamma\)</span> is replaced by <span class="math inline">\(\tilde\gamma\)</span> as the mixing distribution
+<span class="math inline">\(W\)</span> is unique to each MVNG
+distribution.</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">MVNIGmod</span>(Y, X, <span class="at">theta_g =</span> theta_mvnig, <span class="at">stopping =</span> <span class="fl">0.001</span>, <span class="at">max_iter =</span> <span class="dv">50</span>)</span></code></pre></div>
+</div>
+<div id="case-deletion-1" class="section level3">
+<h3>Case Deletion</h3>
+<p>Case deletion can be performed on a dataset and model through a call
+to the case_del function, which returns a vector of approximate
+generalized Cook’s distances for each subject.</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" tabindex="-1"></a>mod <span class="ot">&lt;-</span> <span class="fu">MVNIGmod</span>(Y, X, theta_mvnig)</span>
+<span id="cb3-2"><a href="#cb3-2" tabindex="-1"></a><span class="fu">case_del</span>(Y, X, mod)</span></code></pre></div>
+</div>
+<div id="prediction" class="section level3">
+<h3>Prediction</h3>
+<p>Model prediction on new dataset can be performed on a dataset and
+model through the following function call, which returns a list of
+predicted matrix values.</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" tabindex="-1"></a>mvnig_mod <span class="ot">&lt;-</span> <span class="fu">MVNIGmod</span>(Y, X, theta_mvnig)</span>
+<span id="cb4-2"><a href="#cb4-2" tabindex="-1"></a><span class="fu">predict</span>(mvnig_mod, X)</span></code></pre></div>
+</div>
+</div>
+<div id="references" class="section level2 unnumbered">
+<h2 class="unnumbered">References</h2>
+<div id="refs" class="references csl-bib-body hanging-indent">
+<div id="ref-gallaugher2018skewedmatrixvariatedistributions" class="csl-entry">
+Gallaugher, Michael P. B., and Paul D. McNicholas. 2018. <em>Three
+Skewed Matrix Variate Distributions</em>. <a href="https://arxiv.org/abs/1704.02531">https://arxiv.org/abs/1704.02531</a>.
+</div>
+<div id="ref-Matos2015-qm" class="csl-entry">
+Matos, Larissa A, Dipankar Bandyopadhyay, Luis M Castro, and Victor H
+Lachos. 2015. <span>“Influence Assessment in Censored Mixed-Effects
+Models Using the Multivariate Student’s-t Distribution.”</span> <em>J.
+Multivar. Anal.</em> 141 (October): 104–17.
+</div>
+<div id="ref-a2" class="csl-entry">
+Zhu, Hongtu, Sik-Yum Lee, and Julie Zhou. 2001. <span>“Case‐deletion
+Measures for Models with Incomplete Data.”</span> <em>Biometrika
+Biometrika Trust</em> 88 (January): 727–37.
+</div>
+</div>
+</div>
+
+
+
+<!-- code folding -->
+
+
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+  (function () {
+    var script = document.createElement("script");
+    script.type = "text/javascript";
+    script.src  = "https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML";
+    document.getElementsByTagName("head")[0].appendChild(script);
+  })();
+</script>
+
+</body>
+</html>

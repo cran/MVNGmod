@@ -7,7 +7,7 @@
 predict(mod, X)
 }
 \arguments{
-\item{mod}{object outputted by either MVVGmod or MVNIGmod}
+\item{mod}{object outputted by either \code{MVVGmod} or \code{MVNIGmod}}
 
 \item{X}{Inputted covariate matrix}
 }
@@ -15,23 +15,13 @@ predict(mod, X)
 Returns a list of predicted response matrices
 }
 \description{
-Predicts response values given a list of covariate matrices and a model output from either MVVGmod or MVNIGmod.
+Predicts response values given a list of covariate matrices and a model output from either \code{MVVGmod} or \code{MVNIGmod}.
 }
 \examples{
 \donttest{set.seed(1234)
-# num response variables
-p <- ncol(gaad_res[[1]])
-# num covariates
-q <- ncol(gaad_cov[[1]])
-# generate initial value to input, then run AECM with MVVG distribution
-initial_mvnig_theta <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
-                      A = rep(1,p),
-                     rho = 0.3,
-                     Psi = diag(p),
-                     tgamma = 4)
-mvnig_mod <- MVNIGmod(gaad_res[1:10], gaad_cov[1:10], initial_mvnig_theta)
+mvnig_mod <- MVNIGmod(Y,X,theta_mvnig)
 
-predict(mvnig_mod, gaad_cov[1:10])}
+predict(mvnig_mod,X)}
 }
 \author{
 Samuel Soon

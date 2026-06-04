@@ -5,7 +5,7 @@
 \alias{theta_mvnig}
 \title{Toy Response Initial Parameter (MVNIG)}
 \format{
-List of parameters for input to MVNIGmod function
+List of parameters for input to \code{MVNIGmod} function
 }
 \usage{
 theta_mvnig

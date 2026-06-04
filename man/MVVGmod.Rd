@@ -2,7 +2,7 @@
 % Please edit documentation in R/MVNGmod.R
 \name{MVVGmod}
 \alias{MVVGmod}
-\title{AECM Estimation for Matrix-Variate Variance Gamma (MVVG) Models}
+\title{ECM Estimation for Matrix-Variate Variance Gamma (MVVG) Models}
 \usage{
 MVVGmod(Y, X, theta_g = NULL, stopping = 0.001, max_iter = 50)
 }
@@ -11,7 +11,7 @@ MVVGmod(Y, X, theta_g = NULL, stopping = 0.001, max_iter = 50)
 
 \item{X}{List of \eqn{n_i \times q} design matrices. Matrices must have same number of columns.}
 
-\item{theta_g}{List of parameters to pass as initial values in the AECM algorithm.
+\item{theta_g}{List of parameters to pass as initial values in the ECM algorithm.
 If NULL, will be randomly generated. See Details for an in-depth explanation.}
 
 \item{stopping}{Stopping threshold for the L-infinity norm of differences in consecutive parameter space, evaluated at iteration \eqn{t+1} as
@@ -20,7 +20,7 @@ If NULL, will be randomly generated. See Details for an in-depth explanation.}
 \item{max_iter}{Maximum number of iterations, default is 50.}
 }
 \value{
-MVVGmod returns a list with the following elements:
+\code{MVVGmod} returns a list with the following elements:
 
 \describe{
 \item{\code{Iteration}: }{Number of iterations taken to convergence. \code{Inf} if convergence not reached.}
@@ -43,9 +43,9 @@ Fits the matrix-variate skew regression model
 
 where each response \eqn{Y_i} is a \eqn{n_i \times p} matrix that indexes \eqn{n_i} observations and \eqn{p} response variables. \eqn{X_i} corresponds to a \eqn{n_i \times q} design matrix, and \eqn{\Theta} corresponds to a \eqn{q \times p} coefficient matrix. \eqn{E_i} corresponds to a \eqn{n_i \times p} error matrix, following a matrix-variate variance-gamma distribution.
 
-The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \gamma} using the alternating expectation conditional maximization (AECM) algorithm, using the density
+The model estimates MVVG parameters \eqn{\Theta, \underline{a}, r, \Psi, \gamma} using the alternating expectation conditional maximization (ECM) algorithm, using the density
 
-\deqn{f(Y_i| X_i\Theta,\underline{a},r, \Psi, \gamma, n_i, p) = \dfrac{2\gamma^\gamma \exp[matlib::tr(\Sigma_i^{-1}(Y_i- X_i\Theta)\Psi^{-1}A_i^T)]}{(2\pi)^{n_ip/2} |\Sigma_i|^{p/2} |\Psi|^{n_i/2} \Gamma(\gamma)} \bigg( \dfrac{\delta(Y_i;  X_i\Theta, \Sigma_i, \Psi)}{\rho (A_i, \Sigma_i,\Psi) + 2\gamma} \bigg)^{(\gamma - n_ip/2)/2} \\ \times K_{(\gamma - n_ip/2)} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + 2\gamma][\delta(Y_i; X_i\Theta,\Sigma_i,\Psi)]} \big),}
+\deqn{f(Y_i| X_i\Theta,\underline{a},r, \Psi, \gamma, n_i, p) = \dfrac{2\gamma^\gamma \exp[tr(\Sigma_i^{-1}(Y_i- X_i\Theta)\Psi^{-1}A_i^T)]}{(2\pi)^{n_ip/2} |\Sigma_i|^{p/2} |\Psi|^{n_i/2} \Gamma(\gamma)} \bigg( \dfrac{\delta(Y_i;  X_i\Theta, \Sigma_i, \Psi)}{\rho (A_i, \Sigma_i,\Psi) + 2\gamma} \bigg)^{(\gamma - n_ip/2)/2} \\ \times K_{(\gamma - n_ip/2)} \big( \sqrt{[\rho(A_i, \Sigma_i, \Psi) + 2\gamma][\delta(Y_i; X_i\Theta,\Sigma_i,\Psi)]} \big),}
 
 where \eqn{A_i = \underline{1}_{n_i} \times \underline{a}^T}, \eqn{\Sigma_i = I_{n_i} + r(\underline{1}_{n_i}\underline{1}_{n_i}^T - I_{n_i})},
 \eqn{\delta(X;M, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}(X-M)\Psi^{-1}(X-M)^T)}, \eqn{\rho(A, \Sigma, \Psi) = matlib::tr(\Sigma^{-1}A\Psi^{-1}A^T)}, and \eqn{K_{\nu}(x)} is the modified Bessel function of the second kind.
@@ -63,18 +63,6 @@ The structure of \code{theta_g} and parameter estimates returned by the function
 \examples{
 MVVGmod(Y,X,theta_mvvg)
 
-\donttest{set.seed(1234)
-# num response variables
-p <- ncol(gaad_res[[1]])
-# num covariates
-q <- ncol(gaad_cov[[1]])
-# generate initial value to input, then run AECM with MVVG distribution
-initial_gaad_theta_mvvg <- list(Theta = matrix(stats::rnorm(p*q), nrow = q, ncol = p),
-                      A = rep(1,p),
-                     rho = 0.3,
-                     Psi = diag(p),
-                     gamma = 4)
-MVVGmod(gaad_res[1:10], gaad_cov[1:10], initial_gaad_theta_mvvg)}
 
 }
 \author{

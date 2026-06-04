@@ -1,0 +1,113 @@
+---
+title: "Modeling Matrix-Variate Non-Gaussian Distributions"
+output: rmarkdown::html_vignette
+bibliography: referenc.bib
+vignette: >
+  %\VignetteIndexEntry{Modeling Matrix-Variate Non-Gaussian Distributions}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  include= TRUE, eval = FALSE,
+  comment = "#>"
+)
+library(MVNGmod)
+```
+
+
+
+<!-- This document describes a ECM-based method linear modeling  -->
+## About
+
+The functions in this package are designed to handle ECM-based parameter estimation of models with error following a distribution of the matrix-variate non-Gaussian (MVNG) class. Currently, the matrix-variate extensions of the variance-gamma (MVVG) and normal-inverse Gaussian (MVNIG) distributions are implemented, along with subject-wise case deletion diagnostics for each model.
+
+## Modeling Matrix-variate non-Gaussian Distributions
+
+### Matrix-Variate Non-Gaussian Distributions
+
+Matrix-variate non-Gaussian (MVNG) distributions are a class of distributions introduced by Gallaugher & McNicholas [@gallaugher2018skewedmatrixvariatedistributions], which extend to two dimensions a number of multivariate distributions. Specifically, we extend a set of distributions stochastically tractable under normal variance-mean mixtures 
+
+$$
+Y = \alpha  +\beta V \sqrt{V}W,
+$$
+where $\alpha, \beta$ are constants, $V$ is a standard normal random variable, and $W$ is a non-negative random variable. $W$ follows the gamma distribution in the case of MVVG, and generalized inverse-Gaussian in the case of MVNIG. The extension to matrix-variate is performed by inserting an additional covariance parameter, which regulates between-response covariance.  
+
+
+### Model
+
+The MVNG modeling equation is 
+
+$$
+Y_i = X_i\Theta + E_i,
+$$
+
+where $X_i$ is an explanatory variable matrix, $Y_i$ is a matrix with response columns,  $\Theta$ represents the corresponding coefficient matrix. $E_i$ follows the distribution family $MVNG(0, \underline{a}, \rho, \Psi, ...)$, where $\underline{a}$ is a skewness vector corresponding to each row observation, $\rho$ represents the correlation parameter of the compound-symmetric row covariance matrix, and $\Psi$ is the response covariance matrix. Additional parameters endemic to each MVNG are also included based on the choice of $W$. Model parameters are estimated using an ECM implementation, with multiple runs advised.
+
+### Case-Deletion
+
+When the data are well-approximated around a Gaussian distribution, outlying points tend to be easily distinguishable, and leverage statistics can be computed based on the observed likelihood. However, since MVNG models are ECM-based, direct calculation of Cook's distances is computationally intensive. We instead provide a one-step approximation, and use the score and Hessian expressions of the ECM complete-data likelihoods [@a2] to derive the case-deleted model estimated
+
+$$
+    \hat\theta^1_{[i]} = \hat\theta - \ddot Q(\hat\theta|\hat\theta)^{-1} \dot Q_{[i]}(\hat\theta|\hat\theta)
+$$
+
+for each subject. Substituting this expression into the generalized Cook's distance computation yields the expression,
+
+$$
+    GD_i^1(\theta) = \dot Q_{[i]}(\hat\theta|\hat\theta)^T [-\ddot Q(\hat\theta|\hat\theta)]^{-1}\dot Q_{[i]}(\hat\theta|\hat\theta).
+$$
+
+where $\dot Q_{[i]}(\hat\theta|\hat\theta) = \frac{\partial Q_{[i]}(\theta|\hat\theta)}{\partial\theta}|_{\theta = \hat\theta}$ is the complete-data score function with the $i$th subject deleted and evaluated at $\hat\theta$, and $\ddot Q(\hat\theta|\hat\theta) = \frac{\partial^2 Q(\theta|\hat\theta)}{\partial\theta \partial\theta^T}|_{\theta = \hat\theta}$ is the complete-data Hessian matrix, as given in Lachos \emph{et al.} (2015) [@Matos2015-qm]. 
+
+## Data Input
+
+
+The current versions of the MVNG modeling functions solely accept lists of matrices as inputs for $X$ and $Y$. $X$ represents the list of subject design matrices, while $Y$ should be a list of matrices, with each column indexing a single response variable. Modeling functions additionally allow arguments for the initial parameter estimate, tolerance, and maximum iterations.
+
+## Functions
+
+### MVVG Model
+
+Fitting an MVVG model to the dataset can be performed using the following function call. Returned values include the number of iterations at convergence, initial parameter estimate, final parameter estimate, L-infinity norm of the change in parameter space across each iteration, model AIC, and model BIC. The parameter space of the model includes the endemic parameter $\gamma$ in addition to $\Theta, \underline{a}, \rho, \Psi$.
+
+```{r}
+MVVGmod(Y,X, theta_g = theta_mvvg, stopping = 0.001, max_iter = 50)
+```
+
+
+### MVNIG Model
+
+A MVNIG model can be fit to a dataset in the same way as the MVVG model, using the following function call. The parameter space remains identical, except that the endemic parameter $\gamma$ is replaced by $\tilde\gamma$ as the mixing distribution $W$ is unique to each MVNG distribution.
+
+```{r}
+MVNIGmod(Y, X, theta_g = theta_mvnig, stopping = 0.001, max_iter = 50)
+```
+
+### Case Deletion
+
+Case deletion can be performed on a dataset and model through a call to the case_del function, which returns a vector of approximate generalized Cook's distances for each subject.
+
+```{r}
+mod <- MVNIGmod(Y, X, theta_mvnig)
+case_del(Y, X, mod)
+```
+
+
+### Prediction
+
+Model prediction on new dataset can be performed on a dataset and model through the following function call, which returns a list of predicted matrix values.
+
+
+```{r}
+mvnig_mod <- MVNIGmod(Y, X, theta_mvnig)
+predict(mvnig_mod, X)
+```
+
+
+
+## References
