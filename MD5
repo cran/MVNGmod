@@ -1,7 +1,7 @@
-fa81359dc330ececbec26475eecc9e36 *DESCRIPTION
+ec0d9fefecc1ffc9222e33137431498a *DESCRIPTION
 313eb3e21ddc406f27b335d38eb6af48 *LICENSE
-94b14037d7b1a6737496c76166cf033d *NAMESPACE
-802b8ae4566686e851044bb728d26930 *R/MVNGmod.R
+07a642c5b6f83d4590b2e30c369d793e *NAMESPACE
+9a82dbeb893eec037d8abd36711b8a11 *R/MVNGmod.R
 ed19ca99581136d44b35bbb2240a6bf6 *R/mod_aic.R
 d41d8cd98f00b204e9800998ecf8427e *README
 d54042561b90aafd8a9a202ea63e1e4b *build/partial.rdb
@@ -11,13 +11,14 @@ d2bbc58d3725f28aed5bdd8cc9a6de21 *data/gaad_pac.RData
 e3f05225f49987781fd246a723aa284e *inst/doc/MVNGvignette.Rmd
 f7a069b18db68db25e276eeec3c7e8cb *inst/doc/MVNGvignette.html
 e7f8b8e03fe296cc6ee9125ff8582168 *man/MVNIGmod.Rd
-bbff680cd933117e63aea321bc3ca1a7 *man/MVVGmod.Rd
+1a4c0aacec481fee9851a8f1af52e3c8 *man/MVVGmod.Rd
 93cff95b90579bcaf7a3939bb4971570 *man/X.Rd
 0704df749f3ac57831c6c40cc6162371 *man/Y.Rd
 9399c11462a3357b38a638981bf935ca *man/case_del.Rd
 e4ff7e9d4f0fb72f8f79c1ae587a79ae *man/gaad_cov.Rd
 a67a7698a44148a5a3ddc27f67ecf078 *man/gaad_res.Rd
 71fc75a36088ea8bed6c4ca76e19a761 *man/gaad_theta_mvvg.Rd
+cddb0cae9f7456c89b44a5ea827778d9 *man/mod_hess.Rd
 e322e9c244d69af233fab218e2488f98 *man/predict.Rd
 cf5ccf03c47785f23d15dab527efa242 *man/theta_mvnig.Rd
 3931dddf91f113b50c27e3cb0fde3605 *man/theta_mvvg.Rd

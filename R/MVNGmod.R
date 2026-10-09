@@ -2058,7 +2058,7 @@ BIC <- function(dist, Y, X, theta) {
 #' @author Qingyang Liu
 #'
 #' @examples
-#' MVVGmod(Y,X,theta_mvvg)
+#' MVVGmod(Y[1:5],X[1:5],theta_mvvg)
 #'
 #'
 MVVGmod <- function(Y,
@@ -2338,6 +2338,65 @@ case_deletion_aux <- function(Y, X, latentvars, theta,   scale = FALSE){
 #'
 case_del <- function(Y, X, mod){
   unlist(case_deletion_aux(Y,X,mod$latentvars, mod$`Final Value`))
+}
+
+q1.hessian <- function(Y,X,theta){
+  if(is.null(theta$gamma)){
+    dist <- "mvnig"
+
+  }  else {
+    dist <- "mvvg"
+
+  }
+
+  # if(dist=="mvn"){
+  #   q2.hessian(Y,X,theta, latentvars=NULL, "mvn")
+  # } else{
+
+    if(dist=="mvvg"){
+      ll <- q1.mvvg.update
+    } else{
+      ll <- q1.mvnig.update
+    }
+
+    thetavec <- unlist(theta)
+    nparam <- nrow(theta[[1]])
+    nresp <- ncol(theta[[1]])
+    extra_name <- utils::tail(names(theta), 1)
+
+    shell <- function(thetavec,Y,X, ll){
+      theta_rec <- reconstitute(thetavec, nparam, nresp, extra_name)
+      ll(Y,X,theta_rec)
+    }
+    numDeriv::hessian(shell, thetavec, Y=Y,X=X,ll=ll)
+  # }
+}
+
+#' Asymptotic Variance for MVNG Parameter Estimates
+#'
+#' This function computes the asymptotic covariance matrix of the parameter space, using numerical iteration.
+#'
+#'
+#' @param Y List of \eqn{n_i \times p} response matrices. Matrices must have same number of columns.
+#' @param X List of \eqn{n_i \times q} design matrices. Matrices must have same number of columns.
+#' @param mod Model object returned by a call to \code{MVVGmod} or \code{MVNIGmod}.
+#' @details
+#' Computes asymptotic covariance variance matrix of MLE from the numerical hessian.
+#' @return mod_hess returns covariance matrix corresponding to the vectorized parameter space.
+
+#' @author Samuel Soon
+#' @author Dipankar Bandyopadhyay
+#' @author Qingyang Liu
+#'
+#' @export
+#'
+#' @examples
+#' mod <- MVNIGmod(Y,X,theta_mvnig)
+#' mod_hess(Y,X,mod)
+#'
+mod_hess <- function(Y,X,mod){
+  theta <- mod$`Final Value`
+  -solve(q1.hessian(Y,X,theta))
 }
 
 # mod_aic <- function(loglik, Y,X,theta){

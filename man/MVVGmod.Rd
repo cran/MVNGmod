@@ -61,7 +61,7 @@ The structure of \code{theta_g} and parameter estimates returned by the function
 }
 }
 \examples{
-MVVGmod(Y,X,theta_mvvg)
+MVVGmod(Y[1:5],X[1:5],theta_mvvg)
 
 
 }

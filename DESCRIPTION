@@ -1,7 +1,7 @@
 Package: MVNGmod
 Type: Package
 Title: Matrix-Variate Non-Gaussian Linear Regression Models
-Version: 0.1.2
+Version: 0.1.3
 Authors@R: 
     c(person("Samuel", "Soon", , "samksoon2@gmail.com", role = c("aut", "cre"),
            comment = c()),
@@ -16,16 +16,16 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
 Imports: Bessel, clusterGeneration, DistributionUtils, matlib, maxLik,
-        truncnorm, pracma, matrixcalc, purrr
+        truncnorm, pracma, matrixcalc, purrr, numDeriv
 URL: https://github.com/soonsk-vcu/MVNGmod
 BugReports: https://github.com/soonsk-vcu/MVNGmod/issues
 Suggests: knitr, rmarkdown
 VignetteBuilder: knitr
 NeedsCompilation: no
-Packaged: 2026-07-16 21:26:36 UTC; soonsk
+Packaged: 2026-10-09 17:02:00 UTC; soonsk
 Author: Samuel Soon [aut, cre],
   Dipankar Bandyopadhyay [aut],
   Qingyang Liu [aut]
 Depends: R (>= 3.5.0)
 Repository: CRAN
-Date/Publication: 2026-07-16 21:40:02 UTC
+Date/Publication: 2026-10-09 17:20:02 UTC
